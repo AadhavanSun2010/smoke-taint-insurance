@@ -515,3 +515,5 @@ st.markdown("""
     Data: PurpleAir API v1 · Science: Kennison et al. (2008) · Model: Simplified Linear Phenol Transfer Function
 </div>
 """, unsafe_allow_html=True)
+st.markdown("---")
+st.caption("**Disclaimer:** This dashboard is an academic prototype and simulation built for educational research. It does not constitute a real insurance policy, financial guarantee, or legally binding contract.")
