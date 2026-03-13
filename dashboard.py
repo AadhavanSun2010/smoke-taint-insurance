@@ -535,8 +535,11 @@ st.markdown("""
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("""
-<div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:#3a3030; text-align:center">
+<div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:#8a7a6a; text-align:center; line-height: 1.5;">
     Smoke Taint Parametric Insurance · M&T Dual-Degree Passion Project · Engineering × Business<br>
     Data: PurpleAir API v1 · Science: Kennison et al. (2008) · Model: Simplified Linear Phenol Transfer Function
+</div>
+<div style="font-family:'Inter', sans-serif; font-size:0.65rem; color:#f44336; text-align:center; margin-top: 1rem; opacity: 0.8;">
+    <strong>LEGAL DISCLAIMER:</strong> This dashboard is a proof-of-concept built for educational and demonstration purposes only. It is not a registered insurance product. Any "payouts" calculated or displayed are purely simulations based on public API data and do not guarantee, represent, or constitute actual financial compensation, coverage, or liability.
 </div>
 """, unsafe_allow_html=True)
