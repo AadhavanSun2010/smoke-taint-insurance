@@ -354,3 +354,4 @@ if __name__ == "__main__":
     info_gap = calculate_information_asymmetry_cost(acres=15)
     print(f"\nINFORMATION ASYMMETRY COST: ${info_gap['cost_of_information_gap_usd']:,.2f}")
     print(f"Parametric improvement: {info_gap['time_value_improvement_factor']}x faster payout")
+    

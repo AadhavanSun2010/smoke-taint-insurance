@@ -1,3 +1,4 @@
+
 """
 dashboard.py
 ============
@@ -12,10 +13,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
-import random
-import time
+import requests
+
 from smoke_taint_model import (
-    simulate_sensor_reading,
     evaluate_trigger,
     estimate_guaiacol_deposition,
     calculate_information_asymmetry_cost,
@@ -27,7 +27,41 @@ from smoke_taint_model import (
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PAGE CONFIG
+# LIVE API INTEGRATION (PURPLEAIR)
+# ─────────────────────────────────────────────────────────────────────────────
+class LiveReading:
+    """A data structure to match the inputs required by the smoke_taint_model"""
+    def __init__(self, pm25, temp, humidity):
+        self.timestamp = datetime.now()
+        self.pm25_atm = pm25
+        self.temperature_f = temp
+        self.humidity_pct = humidity
+
+def fetch_purpleair_data(sensor_index):
+    """Fetches real-time data from the PurpleAir API using st.secrets"""
+    try:
+        api_key = st.secrets["PURPLEAIR_API_KEY"]
+        url = f"https://api.purpleair.com/v1/sensors/{sensor_index}"
+        headers = {"X-API-Key": api_key}
+        
+        response = requests.get(url, headers=headers)
+        response.raise_for_status() # Check for HTTP errors
+        data = response.json()
+        
+        sensor = data['sensor']
+        
+        # Create a reading object with the live data
+        return LiveReading(
+            pm25=sensor.get('pm2.5_atm', 0.0),
+            temp=sensor.get('temperature', 70.0), # Default to 70 if sensor lacks temp
+            humidity=sensor.get('humidity', 50.0) # Default to 50% if sensor lacks humidity
+        )
+    except Exception as e:
+        st.sidebar.error(f"API Connection Error: {e}")
+        return None
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE CONFIG & CSS
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Smoke Taint Insurance | Risk Dashboard",
@@ -36,9 +70,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CUSTOM CSS — Dark Wine-Country Aesthetic
-# ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500&display=swap');
@@ -154,6 +185,7 @@ html, body, [class*="css"] {
     font-weight: 500 !important;
     letter-spacing: 0.05em !important;
     padding: 0.6rem 1.5rem !important;
+    width: 100% !important;
 }
 .stButton>button:hover {
     background: linear-gradient(135deg, #9b2335, #c0392b) !important;
@@ -182,8 +214,6 @@ if "policy" not in st.session_state:
     st.session_state.policy = PolicyState()
 if "history" not in st.session_state:
     st.session_state.history = []
-if "scenario" not in st.session_state:
-    st.session_state.scenario = "normal"
 if "payout_simulated" not in st.session_state:
     st.session_state.payout_simulated = False
 if "acres" not in st.session_state:
@@ -200,33 +230,29 @@ with st.sidebar:
     st.session_state.acres = float(acres)
 
     st.markdown("---")
-    st.markdown("### 🌫️ Smoke Scenario")
-    scenario = st.selectbox(
-        "Select atmospheric condition",
-        ["normal", "moderate", "critical", "extreme"],
-        format_func=lambda x: {
-            "normal": "🟢 Normal (< 12 µg/m³)",
-            "moderate": "🟡 Moderate (12–35 µg/m³)",
-            "critical": "🔴 Critical (35–75 µg/m³)",
-            "extreme": "⚫ Extreme (> 80 µg/m³)",
-        }[x]
-    )
-    st.session_state.scenario = scenario
+    st.markdown("### 📡 Live Sensor Feed")
+    st.caption("Target: Underfoot Farms (Tracy, CA)")
+    
+    # --- The Live API Trigger Button ---
+    if st.button("Fetch Live Data"):
+        reading = fetch_purpleair_data(92085) # Hardcoded to Underfoot Farms Index
+        
+        if reading:
+            st.session_state.policy = evaluate_trigger(reading, st.session_state.policy)
+            st.session_state.history.append({
+                "time": reading.timestamp.strftime("%H:%M:%S"),
+                "pm25": reading.pm25_atm,
+                "temp_f": reading.temperature_f,
+                "humidity": reading.humidity_pct,
+                "threshold": PAYOUT_TRIGGER_THRESHOLD_UGM3,
+            })
+            st.success(f"Success! PM2.5: {reading.pm25_atm} µg/m³")
+            
+            # Keep last 30 readings
+            if len(st.session_state.history) > 30:
+                st.session_state.history = st.session_state.history[-30:]
 
-    if st.button("📡 Fetch New Reading"):
-        reading = simulate_sensor_reading(st.session_state.scenario)
-        st.session_state.policy = evaluate_trigger(reading, st.session_state.policy)
-        st.session_state.history.append({
-            "time": reading.timestamp.strftime("%H:%M:%S"),
-            "pm25": reading.pm25_atm,
-            "temp_f": reading.temperature_f,
-            "humidity": reading.humidity_pct,
-            "threshold": PAYOUT_TRIGGER_THRESHOLD_UGM3,
-        })
-        # Keep last 30 readings
-        if len(st.session_state.history) > 30:
-            st.session_state.history = st.session_state.history[-30:]
-
+    st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🔄 Reset Policy"):
         st.session_state.policy = PolicyState()
         st.session_state.history = []
@@ -373,7 +399,7 @@ with col_left:
     else:
         st.markdown("""
         <div class="info-box">
-            📡 No readings yet. Use the sidebar to fetch sensor data and populate the chart.
+            📡 No readings yet. Click "Fetch Live Data" in the sidebar to ping the PurpleAir sensor at Underfoot Farms.
         </div>
         """, unsafe_allow_html=True)
 
@@ -426,32 +452,31 @@ with col_right:
     """, unsafe_allow_html=True)
 
 # ── Payout Simulation ────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">⚡ Smart Contract Execution</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-header">⚡ Smart Contract Execution & Demos</div>', unsafe_allow_html=True)
 
 col_btn1, col_btn2, col_spacer = st.columns([2, 2, 4])
 
 with col_btn1:
     can_simulate = latest_pm25 >= PAYOUT_TRIGGER_THRESHOLD_UGM3 or len(st.session_state.history) == 0
-    if st.button("🚀 Simulate Payout", disabled=False):
+    if st.button("🚀 Simulate Payout Demo", disabled=False):
         st.session_state.payout_simulated = True
         if not policy.payout_triggered:
-            # Force a critical scenario for demo
+            # Force a critical scenario using the new LiveReading structure
             for _ in range(5):
-                r = simulate_sensor_reading("critical")
+                r = LiveReading(pm25=85.0, temp=75.0, humidity=40.0)
                 r.timestamp = datetime.now() - timedelta(hours=5)
                 policy = evaluate_trigger(r, policy)
             st.session_state.policy = policy
 
 with col_btn2:
-    if st.button("📊 Load Demo Scenario"):
-        # Populate with a realistic smoke event
+    if st.button("📊 Load Historical Event Demo"):
+        # Populate with a realistic past smoke event
         st.session_state.policy = PolicyState()
         st.session_state.history = []
         base_time = datetime.now() - timedelta(hours=6)
         event_pms = [8.2, 11.5, 22.3, 38.7, 55.1, 72.4, 61.8, 48.3, 39.1, 41.7, 44.2, 37.8]
         for i, pm in enumerate(event_pms):
-            r = simulate_sensor_reading("normal")
-            r.pm25_atm = pm
+            r = LiveReading(pm25=pm, temp=70.0, humidity=50.0)
             r.timestamp = base_time + timedelta(minutes=i * 30)
             st.session_state.policy = evaluate_trigger(r, st.session_state.policy)
             st.session_state.history.append({
@@ -515,5 +540,3 @@ st.markdown("""
     Data: PurpleAir API v1 · Science: Kennison et al. (2008) · Model: Simplified Linear Phenol Transfer Function
 </div>
 """, unsafe_allow_html=True)
-st.markdown("---")
-st.caption("**Disclaimer:** This dashboard is an academic prototype and simulation built for educational research. It does not constitute a real insurance policy, financial guarantee, or legally binding contract.")
